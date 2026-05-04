@@ -1,8 +1,8 @@
-# 🏦 International Payments Portal — Task 2
+
 
 A secure customer-facing international payment portal built with React (frontend) and Node.js/Express (backend).
 
----
+
 
 ## Security Features Implemented
 
