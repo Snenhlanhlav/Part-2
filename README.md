@@ -1,111 +1,196 @@
+# SecureBank — International Payments Portal
 
-
-A secure customer-facing international payment portal built with React (frontend) and Node.js/Express (backend).
-
-
-
-## Security Features Implemented
-
-| Attack / Requirement | Implementation |
-|---|---|
-| **Password hashing & salting** | `bcryptjs` with cost factor 12 — unique salt per user |
-| **Input whitelisting (RegEx)** | All fields validated client-side AND server-side with strict RegEx |
-| **HTTPS / SSL** | Node `https` module with TLS certificates; React served with `HTTPS=true` |
-| **SQL / NoSQL Injection** | `express-mongo-sanitize` strips `$` and `.` operators; schema-level validation |
-| **XSS** | `helmet` sets `X-XSS-Protection`, CSP headers; React escapes output by default |
-| **Clickjacking** | `helmet` sets `X-Frame-Options: DENY` + CSP `frame-ancestors 'none'` |
-| **Session Jacking** | Short-lived JWT (1h); HTTPS-only transmission; generic error messages |
-| **MITM** | HTTPS/TLS enforced; HSTS header set by `helmet` |
-| **DDoS / Brute Force** | `express-rate-limit`: 100 req/15min globally; 10 req/15min on auth routes |
-| **CORS** | Restricted to frontend origin only |
-| **Body size limit** | `express.json({ limit: '10kb' })` |
+Full-stack secure web application for international SWIFT payments.  
+**Stack:** React · Node.js · Express · MongoDB · HTTPS · JWT · CircleCI · SonarQube
 
 ---
 
 ## Project Structure
 
 ```
-payment-portal/
-├── backend/
-│   ├── server.js            ← Express + all security middleware
-│   ├── routes/
-│   │   ├── auth.js          ← Register & Login routes
-│   │   └── payments.js      ← Payment submission routes
-│   ├── models/
-│   │   ├── User.js          ← User schema with bcrypt pre-save hook
-│   │   └── Payment.js       ← Payment schema with RegEx validators
+secure-payments/
+├── backend/                  # Express API (HTTPS)
+│   ├── certs/                # SSL key + cert (self-signed for dev)
+│   ├── config/db.js          # MongoDB connection
 │   ├── middleware/
-│   │   └── auth.js          ← JWT verify + role-based access
-│   ├── config/              ← Place key.pem and cert.pem here
-│   ├── .env.example         ← Copy to .env and fill in values
-│   └── package.json
-└── frontend/
-    ├── src/
-    │   ├── pages/
-    │   │   ├── RegisterPage.js
-    │   │   ├── LoginPage.js
-    │   │   └── PaymentPage.js
-    │   ├── utils/
-    │   │   ├── validation.js   ← Client-side RegEx whitelist
-    │   │   ├── api.js          ← Axios instance with JWT interceptor
-    │   │   └── AuthContext.js  ← Global auth state
-    │   ├── App.js              ← Routes + protected route wrapper
-    │   └── App.css
-    └── package.json
+│   │   ├── auth.js           # JWT protect + restrictTo
+│   │   └── validate.js       # RegEx whitelist validation
+│   ├── models/
+│   │   ├── Customer.js       # bcrypt hashed password
+│   │   ├── Employee.js       # bcrypt hashed password (seed-only)
+│   │   └── Transaction.js    # IBAN + SWIFT validation
+│   ├── routes/
+│   │   ├── customerAuth.js   # POST /register, /login
+│   │   ├── employeeAuth.js   # POST /login (no register)
+│   │   └── transactions.js   # Full CRUD with role guards
+│   ├── scripts/
+│   │   └── seedEmployees.js  # Pre-creates employee accounts
+│   ├── server.js             # HTTPS server + security middleware
+│   └── .env.example
+├── frontend/                 # React app
+│   └── src/
+│       ├── context/AuthContext.js
+│       ├── pages/
+│       │   ├── customer/     # Register · Login · PaymentForm
+│       │   └── employee/     # EmployeeLogin · EmployeePortal
+│       └── utils/
+│           ├── api.js        # Axios with JWT interceptor
+│           └── validation.js # Mirrored RegEx patterns
+├── .circleci/config.yml      # CI/CD pipeline
+└── sonar-project.properties  # SonarQube config
 ```
 
 ---
 
-## Setup & Running
+## Quick Start
 
-### 1. Generate SSL Certificates (development)
+### Prerequisites
+- Node.js 18+
+- MongoDB running locally (`mongod`)
+- OpenSSL (for SSL cert generation)
+
+### 1. Clone & Install
+
 ```bash
-mkdir -p backend/config
-cd backend/config
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-  -keyout key.pem -out cert.pem \
-  -subj "/C=ZA/ST=Gauteng/L=Johannesburg/O=BankDev/CN=localhost"
+git clone https://github.com/YOUR_USERNAME/secure-payments.git
+cd secure-payments
+
+# Install backend
+cd backend && npm install
+
+# Install frontend
+cd ../frontend && npm install
 ```
 
 ### 2. Configure Environment
-```bash
-cp backend/.env.example backend/.env
-# Edit .env:
-#   MONGO_URI=mongodb://localhost:27017/payment_portal
-#   JWT_SECRET=<generate with: node -e "console.log(require('crypto').randomBytes(64).toString('hex'))">
-```
 
-### 3. Start Backend
 ```bash
 cd backend
-npm install
-npm start
-# → HTTPS server on https://localhost:5001
+cp .env.example .env
+# Edit .env — set a strong JWT_SECRET (32+ random chars)
 ```
 
-### 4. Start Frontend
+### 3. Generate SSL Certificate (dev only)
+
+```bash
+cd backend
+openssl req -x509 -newkey rsa:2048 \
+  -keyout certs/key.pem \
+  -out certs/cert.pem \
+  -days 365 -nodes \
+  -subj "/C=ZA/ST=Gauteng/L=Johannesburg/O=SecureBank/CN=localhost"
+```
+
+### 4. Seed Employee Accounts
+
+```bash
+cd backend
+npm run seed
+# Creates: alice.mokoena/EMP00001, brian.dlamini/EMP00002, carla.vdmerwe/EMP00003
+# Default password: Secure@Pass1 (change in scripts/seedEmployees.js before production)
+```
+
+### 5. Start Backend
+
+```bash
+cd backend
+npm run dev
+# API running at https://localhost:5000
+```
+
+### 6. Start Frontend
+
 ```bash
 cd frontend
-npm install
 npm start
-# → React on https://localhost:3000 (HTTPS=true in package.json)
+# UI running at http://localhost:3000
 ```
+
+> **Note:** Because the backend uses a self-signed cert, your browser will show a security warning.  
+> Visit `https://localhost:5000/api/health` and click "Accept Risk" before using the app.
+
+---
+
+## User Flows
+
+### Customer
+1. Register at `/customer/register` (fullName, ID number, account number, username, password)
+2. Login at `/customer/login` (username, account number, password)
+3. Submit payment at `/customer/payment` (amount, currency, IBAN, SWIFT code, recipient)
+
+### Employee
+1. Login at `/employee/login` (username, employeeId, password)  
+   ⚠️ **No registration page exists — employees are seeded only**
+2. View pending transactions on `/employee/portal`
+3. Click **✔ Verified** on each transaction after checking SWIFT details
+4. Click **✈️ Submit to SWIFT** to finalise all verified transactions
+
+---
+
+## Security Features
+
+| Attack | Mitigation |
+|---|---|
+| **SQL/NoSQL Injection** | `express-mongo-sanitize` strips `$` and `.` operators; Mongoose typed schemas |
+| **XSS** | `xss-clean` middleware; Helmet CSP headers; React escapes output by default |
+| **Clickjacking** | `X-Frame-Options: DENY` via Helmet `frameguard` |
+| **Session Jacking** | Short-lived JWT (1h); Bearer token in Authorization header (not cookies); HTTPS-only |
+| **MITM** | All traffic over HTTPS/TLS; HSTS header enforced |
+| **DDoS / Brute Force** | `express-rate-limit`: 200 req/15min global; 10 req/15min on auth endpoints |
+| **CSRF** | JWT in Authorization header (not cookies); CORS restricted to `localhost:3000` |
+| **Weak Passwords** | bcrypt 12 rounds (hash+salt); strict RegEx enforces complexity |
+| **Input Tampering** | RegEx whitelist on ALL fields, both client and server |
+| **Role Escalation** | `restrictTo('employee')` middleware on portal routes; role embedded in JWT |
 
 ---
 
 ## API Endpoints
 
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/auth/register` | None | Customer registration |
-| POST | `/api/auth/login` | None | Customer / employee login |
-| POST | `/api/payments` | JWT (customer) | Submit a payment |
-| GET | `/api/payments/my` | JWT (customer) | View own payments |
+### Customer Auth
+```
+POST  /api/auth/customer/register   { fullName, idNumber, accountNumber, username, password }
+POST  /api/auth/customer/login      { username, accountNumber, password }
+```
+
+### Employee Auth
+```
+POST  /api/auth/employee/login      { username, employeeId, password }
+```
+
+### Transactions
+```
+POST  /api/transactions             [customer] Create payment
+GET   /api/transactions/my          [customer] My transactions
+GET   /api/transactions             [employee] All pending/verified
+PATCH /api/transactions/:id/verify  [employee] Verify one transaction
+POST  /api/transactions/submit-to-swift  [employee] Submit all verified
+```
 
 ---
 
-## Customer Flow
-1. **Register** — `/register` — Provide full name, SA ID, account number, username, password
-2. **Login** — `/login` — Provide username, account number, password → receive JWT
-3. **Pay** — `/payment` — Enter amount, currency, provider, payee details, SWIFT code → Pay Now
-4. Payment stored in DB with status `pending` — visible in employee portal (Task 3)
+## CI/CD — CircleCI + SonarQube
+
+### Setup Steps
+1. Push repo to GitHub
+2. Connect repo to [CircleCI](https://circleci.com)
+3. Create a **SonarCloud** project at [sonarcloud.io](https://sonarcloud.io)
+4. Add `SONAR_TOKEN` to a CircleCI context named `SonarCloud`
+5. Every push triggers: Install → Build → Test → SonarQube Scan
+
+### SonarQube Checks
+- Security Hotspots (hardcoded secrets, weak crypto, injection risks)
+- Code Smells (maintainability)
+- Bugs and Vulnerabilities
+- Coverage reporting
+
+---
+
+## Employee Seed Credentials (Dev Only)
+
+| Username | Employee ID | Password |
+|---|---|---|
+| alice.mokoena | EMP00001 | Secure@Pass1 |
+| brian.dlamini | EMP00002 | Secure@Pass2 |
+| carla.vdmerwe | EMP00003 | Secure@Pass3 |
+
+> Change all passwords before any production deployment.
